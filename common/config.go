@@ -251,6 +251,7 @@ type KubernetesConfig struct {
 	PodSecurityContext                      KubernetesPodSecurityContext `toml:"pod_security_context,omitempty" namespace:"pod-security-context" description:"A security context attached to each build pod"`
 	Volumes                                 KubernetesVolumes            `toml:"volumes"`
 	Services                                []Service                    `toml:"services,omitempty" json:"services" description:"Add service that is started with container"`
+	HostAliases                    			map[string][]string  		 `toml:"host_aliases,omitempty" json:"host_aliases" long:"host_aliases" env:"KUBERNETES_HOST_ALIASES" description:"hostAliases to add to the build and helper containers."`
 }
 
 type KubernetesVolumes struct {

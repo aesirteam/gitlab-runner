@@ -116,6 +116,7 @@ The following keywords help to define the behavior of the Runner within Kubernet
   pattern](https://docs.microsoft.com/en-us/azure/architecture/patterns/sidecar).
   Read more about [using services](#using-services).
 - `affinity`: Specify affinity rules that determine which node runs the build. Read more about [using affinity](#using-affinity).      
+- `host_aliases`: A string of the form `ip_address,hostname1,hostname2,...` that adds a Kubernetes `HostAlias` to the helper and builder containers to add custom hostnames to IP address mappings. Only one IP address mapping is supported at the moment. Default is an empty string, which doesn't add any custom host alias mappings.
 
 ### Configuring executor Service Account
 
@@ -240,6 +241,7 @@ concurrent = 4
     helper_memory_limit = "100Mi"
     poll_interval = 5
     poll_timeout = 3600
+    host_aliases = "10.10.0.56,gitlab.example.org"
     [runners.kubernetes.node_selector]
       gitlab = "true"
     [runners.kubernetes.node_tolerations]

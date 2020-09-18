@@ -912,7 +912,14 @@ func (s *executor) setupBuildPod(initContainers []api.Container) error {
 		return err
 	}
 
-	podConfig := s.preparePodConfig(labels, annotations, podServices, imagePullSecrets, hostAlias, initContainers)
+	var hostAliases []api.HostAlias
+	hostAliases = append(hostAliases, *hostAlias)
+
+	for ip, hostnames := range s.Config.Kubernetes.HostAliases {
+		hostAliases = append(hostAliases, api.HostAlias{IP:ip, Hostnames: hostnames})
+	}
+
+	podConfig := s.preparePodConfig(labels, annotations, podServices, imagePullSecrets, hostAliases, initContainers)
 
 	s.Debugln("Creating build pod")
 	pod, err := s.kubeClient.CoreV1().Pods(s.configurationOverwrites.namespace).Create(&podConfig)
@@ -933,7 +940,7 @@ func (s *executor) preparePodConfig(
 	labels, annotations map[string]string,
 	services []api.Container,
 	imagePullSecrets []api.LocalObjectReference,
-	hostAlias *api.HostAlias,
+	hostAlias []api.HostAlias,
 	initContainers []api.Container,
 ) api.Pod {
 	buildImage := s.Build.GetAllVariables().ExpandValue(s.options.Image.Name)
@@ -979,7 +986,7 @@ func (s *executor) preparePodConfig(
 	}
 
 	if hostAlias != nil {
-		pod.Spec.HostAliases = []api.HostAlias{*hostAlias}
+		pod.Spec.HostAliases = hostAlias  //[]api.HostAlias{*hostAlias}
 	}
 
 	return pod

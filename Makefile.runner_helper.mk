@@ -15,9 +15,9 @@
 # generally used for linux based Dockerfiles.
 BASE_TAR_PATH := out/helper-images/prebuilt
 TAR_XZ += ${BASE_TAR_PATH}-x86_64.tar.xz
-TAR_XZ += ${BASE_TAR_PATH}-arm.tar.xz
-TAR_XZ += ${BASE_TAR_PATH}-arm64.tar.xz
-TAR_XZ += ${BASE_TAR_PATH}-s390x.tar.xz
+# TAR_XZ += ${BASE_TAR_PATH}-arm.tar.xz
+# TAR_XZ += ${BASE_TAR_PATH}-arm64.tar.xz
+# TAR_XZ += ${BASE_TAR_PATH}-s390x.tar.xz
 
 # Binaries that we support for the helper image. We are using the following
 # pattern match:
@@ -25,11 +25,11 @@ TAR_XZ += ${BASE_TAR_PATH}-s390x.tar.xz
 # match up with GO_ARCH_* variables names. Note that Linux is implied by
 # default.
 BASE_BINARY_PATH := out/binaries/gitlab-runner-helper/gitlab-runner-helper
-BINARIES := ${BASE_BINARY_PATH}.x86_64-windows
+# BINARIES := ${BASE_BINARY_PATH}.x86_64-windows
 BINARIES += ${BASE_BINARY_PATH}.x86_64
-BINARIES += ${BASE_BINARY_PATH}.arm
-BINARIES += ${BASE_BINARY_PATH}.arm64
-BINARIES += ${BASE_BINARY_PATH}.s390x
+# BINARIES += ${BASE_BINARY_PATH}.arm
+# BINARIES += ${BASE_BINARY_PATH}.arm64
+# BINARIES += ${BASE_BINARY_PATH}.s390x
 
 # Define variables with the architecture for each matching binary. We are using
 # the following pattern match GO_ARCH_{{arch}}-{{os}}, these should match up

@@ -1,4 +1,6 @@
-#!/bin/sh
+#!/bin/bash
+
+[[ -z $REGISTRATION_TOKEN ]] && exit 1
 
 # gitlab-runner data directory
 DATA_DIR="/etc/gitlab-runner"
@@ -17,6 +19,107 @@ if [ -f "${CA_CERTIFICATES_PATH}" ]; then
   # update the ca if the custom ca is different than the current
   cmp -s "${CA_CERTIFICATES_PATH}" "${LOCAL_CA_PATH}" || update_ca
 fi
+
+export KUBERNETES_HOST=${KUBERNETES_HOST:-https://$KUBERNETES_SERVICE_HOST:$KUBERNETES_SERVICE_PORT}
+export KUBERNETES_CA_FILE=/run/secrets/kubernetes.io/serviceaccount/ca.crt
+export KUBERNETES_BEARER_TOKEN=$(cat /run/secrets/kubernetes.io/serviceaccount/token)
+export KUBERNETES_NAMESPACE=$(cat /run/secrets/kubernetes.io/serviceaccount/namespace)
+export KUBERNETES_SERVICE_ACCOUNT=${KUBERNETES_SERVICE_ACCOUNT:-devops}
+export KUBERNETES_PULL_POLICY=${KUBERNETES_PULL_POLICY:-always} #never, if-not-present, always
+
+REGISTRY_DOMAIN=${REGISTRY_DOMAIN:-hub.bigdatagz.com}
+if [[ ! -z $DOCKER_USER && ! -z $DOCKER_PASSWORD ]]; then
+  DOCKER_SECRET_NAME="${KUBERNETES_SERVICE_ACCOUNT}-docker-secret"
+  gitlab-runner credential \
+    --type       docker \
+    --name       $DOCKER_SECRET_NAME \
+    --registry   $REGISTRY_DOMAIN \
+    --username   $DOCKER_USER \
+    --password   $DOCKER_PASSWORD \
+    && sleep 0
+fi
+
+NPM_DOMAIN=${NPM_DOMAIN:-http://npm.bigdatagz.com}
+if [[ ! -z $NPM_USER && ! -z $NPM_PASSWORD ]]; then
+  NPM_SECRET_NAME="${KUBERNETES_SERVICE_ACCOUNT}-npm-secret"
+  gitlab-runner credential \
+    --type       npm \
+    --name       $NPM_SECRET_NAME \
+    --registry   $NPM_DOMAIN \
+    --username   $NPM_USER \
+    --password   $NPM_PASSWORD \
+    && sleep 0
+  export RUNNER_PRE_BUILD_SCRIPT="cp /root/npm/.npmrc \$CI_PROJECT_DIR/"
+fi
+
+export RUNNER_NAME=${RUNNER_NAME:-$HOSTNAME}
+export CI_SERVER_URL=${CI_SERVER_URL:-https://code.bigdatagz.com}
+
+gitlab-runner register \
+  --non-interactive \
+  --env GIT_STRATEGY=fetch \
+  --executor kubernetes \
+  --kubernetes-helper-image ${KUBERNETES_HELPER_IMAGE:-$REGISTRY_DOMAIN/gitlab/gitlab-runner-helper:x86_64-f45ab93f} \
+  --kubernetes-image ${KUBERNETES_IMAGE:-$REGISTRY_DOMAIN/library/docker:19.03.8-git} \
+  --kubernetes-image-pull-secrets $DOCKER_SECRET_NAME \
+  --kubernetes-privileged
+
+sed "s/^concurrent.*/concurrent = ${RUNNER_CONCURRENCY:-4}/" -i $CONFIG_FILE
+
+INDENT4=`printf '%-4s'`; INDENT6=`printf '%-6s'`; INDENT8=`printf '%-8s'`
+
+# custom kubernetes volumes host_path
+cat <<- EOF >> $CONFIG_FILE
+${INDENT4}[[runners.kubernetes.volumes.host_path]]
+${INDENT6}name = "docker"
+${INDENT6}mount_path = "/var/run/docker.sock"
+${INDENT6}host_path = "/var/run/docker.sock"
+${INDENT6}read_only = true
+${INDENT4}[[runners.kubernetes.volumes.host_path]]
+${INDENT6}name = "kubectl"
+${INDENT6}mount_path = "/usr/bin/kubectl"
+${INDENT6}host_path = "/usr/bin/kubectl"
+${INDENT6}read_only = true
+EOF
+
+# custom kubernetes volumes image secret
+[[ ! -z $DOCKER_SECRET_NAME ]] && cat <<- EOF >> $CONFIG_FILE
+${INDENT4}[[runners.kubernetes.volumes.secret]]
+${INDENT6}name = "${DOCKER_SECRET_NAME}"
+${INDENT6}mount_path = "/root/.docker"
+${INDENT6}read_only = true
+${INDENT6}[runners.kubernetes.volumes.secret.items]
+${INDENT8}"config.json" = "config.json"
+EOF
+
+[[ ! -z $NPM_SECRET_NAME ]] && cat <<- EOF >> $CONFIG_FILE
+${INDENT4}[[runners.kubernetes.volumes.secret]]
+${INDENT6}name = "${NPM_SECRET_NAME}"
+${INDENT6}mount_path = "/root/npm"
+${INDENT6}read_only = true
+EOF
+
+# custom kubernetes host_aliases
+gen_host_aliases() {
+  i=1
+  for item in $@; do
+     if [ $i -eq 1 ]; then
+       key=$item
+     elif [ $i -eq $# ]; then
+       val=$val$(printf '"%s"' $item)
+     else
+       val=$val$(printf '"%s",' $item)
+     fi
+     let i++
+  done
+  printf '%s"%s" = [%s]\n' "${INDENT6}" $key $val
+}
+
+HOST_ALIASES=$(grep -A100 HostAliases /etc/hosts|grep -v HostAliases)
+[[ ! -z $HOST_ALIASES ]] && cat <<- EOF >> $CONFIG_FILE
+${INDENT4}[runners.kubernetes.host_aliases]
+`echo -e $HOST_ALIASES | while read -r line; do gen_host_aliases $line; done`
+EOF
 
 # launch gitlab-runner passing all arguments
 exec gitlab-runner "$@"
